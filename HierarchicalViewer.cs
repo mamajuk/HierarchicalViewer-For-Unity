@@ -228,23 +228,43 @@ public sealed class HierarchicalViewer : MonoBehaviour
             /********************************************************
              *   현재 선택된 도구에 따라서 적절한 GUI를 출력한다...
              * ******/
+            using (var scope = new EditorGUI.ChangeCheckScope())
+            {
+                /**이동 도구일 경우...*/
+                if (_toolType == Tool.Move){
+                    Vector3 ret = EditorGUI.Vector3Field(fieldRect, "", _selection.position);
 
-            /**이동 도구일 경우...*/
-            if (_toolType==Tool.Move){
-                EditorGUI.Vector3Field(fieldRect, "", _selection.position);
-                return;
-            }
+                    if (scope.changed)
+                    {
+                        Undo.RecordObject(_selection, $"Changed transform of {_selection.name}.");
+                        _selection.position = ret;
+                    }
+                    return;
+                }
 
-            /**회전 도구일 경우...*/
-            else if (_toolType == Tool.Rotate){
-                EditorGUI.Vector3Field(fieldRect, "", _selection.localEulerAngles);
-                return;
-            }
+                /**회전 도구일 경우...*/
+                else if (_toolType == Tool.Rotate){
+                    Vector3 ret = EditorGUI.Vector3Field(fieldRect, "", _selection.localEulerAngles);
 
-            /**스케일 도구일 경우...*/
-            else if (_toolType == Tool.Scale){
-                EditorGUI.Vector3Field(fieldRect, "", _selection.localScale);
-                return;
+                    if (scope.changed) 
+                    {
+                        Undo.RecordObject(_selection, $"Changed transform of {_selection.name}.");
+                        _selection.localEulerAngles = ret;
+                    }
+                    return;
+                }
+
+                /**스케일 도구일 경우...*/
+                else if (_toolType == Tool.Scale){
+                    Vector3 ret = EditorGUI.Vector3Field(fieldRect, "", _selection.localScale);
+
+                    if (scope.changed)
+                    {
+                        Undo.RecordObject(_selection, $"Changed transform of {_selection.name}.");
+                        _selection.localScale = ret;
+                    }
+                    return;
+                }
             }
 
             #endregion
