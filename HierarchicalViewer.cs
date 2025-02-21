@@ -32,8 +32,11 @@ public sealed class HierarchicalViewer : MonoBehaviour
         private static GUIStyle NodeButtonStyle, GrabNodeButtonStyle, NameTxtStyle;
 
         /**selection....*/
-        private Transform  _selection = null;
-        private Tool       _toolType = Tool.Move;
+        private Transform          _showTargetTr;
+        private Transform          _selection = null;
+        private SerializedProperty _showTarget;
+        private SerializedProperty _lineColor;
+        private Tool               _toolType = Tool.Move;
 
 
 
@@ -46,6 +49,7 @@ public sealed class HierarchicalViewer : MonoBehaviour
             HierarchicalViewer curTarget = (target as HierarchicalViewer);
             if (curTarget == null) return;
 
+
             /*************************************************
              *   모든 본들을 표시한다....   
              * ****/
@@ -53,8 +57,9 @@ public sealed class HierarchicalViewer : MonoBehaviour
 
             Handles.BeginGUI();
             {
-                Vector2 targetGUIPos = HandleUtility.WorldToGUIPoint(curTarget.transform.position);
-                GUI_ShowTargetChildrens(curTarget.transform, targetGUIPos);
+                Transform rootTr       = (_showTargetTr != null ? _showTargetTr : curTarget.transform);
+                Vector2   targetGUIPos = HandleUtility.WorldToGUIPoint(rootTr.position);
+                GUI_ShowTargetChildrens(rootTr, targetGUIPos);
             }
             Handles.EndGUI();
 
@@ -142,6 +147,25 @@ public sealed class HierarchicalViewer : MonoBehaviour
             _selection = null;
         }
 
+        public override void OnInspectorGUI()
+        {
+            #region Omit
+            EditorGUILayout.HelpBox("If the Root Transform is not valid, it will be displayed based on the Transform to which the component is attached.", MessageType.Info);
+
+            using (var scope = new EditorGUI.ChangeCheckScope()){
+                UnityEngine.Object trRet    = EditorGUILayout.ObjectField("Root Transform", _showTarget.objectReferenceValue, typeof(Transform), true);
+                Color              colorRet = EditorGUILayout.ColorField("Line Color", _lineColor.colorValue);
+
+                if (scope.changed){
+                    _showTarget.objectReferenceValue = trRet;
+                    _lineColor.colorValue            = colorRet;
+                    serializedObject.ApplyModifiedProperties();
+                }
+            }
+
+            #endregion
+        }
+
 
 
         ///================================================
@@ -153,6 +177,12 @@ public sealed class HierarchicalViewer : MonoBehaviour
             /*************************************************
              *    각종 프로퍼티와 스타일들을 초기화한다....
              * ******/
+
+            _lineColor  = serializedObject.FindProperty("LineColor");
+            _showTarget = serializedObject.FindProperty("ShowTarget");
+            if(_showTarget!=null){
+                _showTargetTr = (_showTarget.objectReferenceValue as Transform);
+            }
 
             /**스타일을 초기화한다...*/
             Texture2D t = new Texture2D(1, 1);
@@ -223,11 +253,14 @@ public sealed class HierarchicalViewer : MonoBehaviour
         private void GUI_ShowTargetChildrens(Transform tr, Vector2 prevHandlePos, bool isSelectionChild=false)
         {
             #region Omit
-            int childCount     = tr.childCount;
-            Vector3 trPos      = tr.position;
-            Vector3 trGUIPos   = HandleUtility.WorldToGUIPointWithDepth(trPos);
+            int childCount        = tr.childCount;
+            Vector3 trPos         = tr.position;
+            Vector3 trGUIPos      = HandleUtility.WorldToGUIPointWithDepth(trPos);
+            Plane[] frustumPlanes = GeometryUtility.CalculateFrustumPlanes(Camera.current);
 
-            /**tr의 모든 자식들을 GUI로 표시한다...*/
+            /***************************************************
+             *   tr의 모든 자식들을 GUI로 표시한다....
+             * *****/
             for (int i=0; i<childCount; i++){
 
                 Transform child       = tr.GetChild(i);
@@ -241,14 +274,18 @@ public sealed class HierarchicalViewer : MonoBehaviour
                     isSelectionChild = true;
                 }
 
-                /**Child GUIPos가 화면에 보이지 않는다면 본 표시를 생략한다...**/
-                if (childGUIPos.z >= .1f)
-                {
-                    Handles.color = Color.black;
-                    Handles.DrawLine(trGUIPos, childGUIPos, 5f);
+                /*********************************************************
+                 *    본이 카메라에서 컬링되지 않았을 경우에만 표시한다...
+                 * *****/
+                Bounds pointBounds = new Bounds(child.position, Vector3.zero);
 
-                    Handles.color = (isSelectionChild && _selection!=child? GRAB_QUAD_COLOR:BONE_QUAD_COLOR);
-                    Handles.DrawLine(trGUIPos, childGUIPos, 1f);
+                if (GeometryUtility.TestPlanesAABB(frustumPlanes, pointBounds))
+                {
+                    Handles.color = (isSelectionChild && _selection != child ? GRAB_QUAD_COLOR : _lineColor.colorValue);
+                    Handles.DrawAAPolyLine(10f, trGUIPos, childGUIPos);
+
+                    Handles.color = Color.black;
+                    Handles.DrawAAPolyLine(7f, trGUIPos, childGUIPos);
 
                     /**해당 버튼을 누르면 트랜스폼을 편집할 수 있도록 한다...*/
                     if (GUI_ShowBoneButton(childGUIPos, nodeStyle)){
@@ -285,4 +322,7 @@ public sealed class HierarchicalViewer : MonoBehaviour
     }
 #endif
     #endregion 
+
+    [SerializeField] public Transform ShowTarget;
+    [SerializeField] public Color     LineColor = Color.black;
 }
